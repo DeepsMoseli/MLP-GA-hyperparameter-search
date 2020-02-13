@@ -13,8 +13,7 @@ from tqdm import tqdm
 from sklearn.datasets import load_breast_cancer
 from sklearn.neural_network import MLPClassifier as NN
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score,roc_auc_score
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
 import warnings
 warnings.simplefilter("ignore")
 import pickle
@@ -23,12 +22,9 @@ import pickle
 ##############################################################################
 # Load the breast cancer data and split into test and training to use in NN  #
 ##############################################################################
-data = pd.read_csv("train.csv")
-y = data.label
-del data["label"]
-data.head(5)
-x_train,x_test,y_train,y_test = train_test_split(data,y,
-                                                 test_size=0.3,random_state=42)
+data = load_breast_cancer()
+x_train,x_test,y_train,y_test = train_test_split(data.data,data.target,
+                                                 test_size=0.2,random_state=42)
 
 
 ##############################################################################
@@ -82,13 +78,13 @@ class MLPerceptronClass:
             return np.random.random()/200
         
     def max_iter(self):
-        return np.random.randint(50,150)
+        return np.random.randint(50,400)
     
     def Random_individual(self):
         #hiddend layer 
         params={}
-        layer_size = np.random.randint(50,200)
-        num_layers =  np.random.randint(2,150)
+        layer_size = np.random.randint(20,400)
+        num_layers =  np.random.randint(1,200)
         params["hidden_layer_sizes"] = (layer_size,num_layers)
         
         #activation
@@ -120,9 +116,9 @@ class Genetic_Algorithm:
         self.population = []
         self.new_population = []
         self.fitness = {}
-        self.target = 0.85
-        self.max_gen = 25 
-        self.decay_generations = 3
+        self.target = 0.98
+        self.max_gen = 100 
+        self.decay_generations = 5
         
         
     def mutate(self):
@@ -149,12 +145,12 @@ class Genetic_Algorithm:
     def calc_fitness(self,individual):
         model_eval = MLPerceptronClass(False,individual)
         model_eval.model.fit(x_train,y_train)
-        return roc_auc_score(y_test,model_eval.model.predict_proba(x_test)[:,1])
+        return accuracy_score(y_test,model_eval.model.predict(x_test))
     
     def adaptive_probs(self):
-        self.mutation_prob -= 0.001
+        self.mutation_prob -= 0.02
         self.crossover_prob -= 0.01 
-        self.elitism += 0.01
+        self.elitism += 0.012
     
     def Main(self):
         
@@ -236,61 +232,14 @@ class Analytics:
         
 """parameters: population_size,mutation_prob,elitism,crossover_prob"""
 
-initThis = Genetic_Algorithm(population_size=20,mutation_prob=0.12,elitism=0.12,crossover_prob=0.83)
-initThis.Main()
-np.argmax(initThis.fitness["Generation %s"%25])
-initThis.fitness["Generation %s"%25][3]
-initThis.population[3]
-
-submit=MLPerceptronClass(False,initThis.population[3])
-submit.model.fit(data,y)
-y_proba=submit.model.predict_proba(data)
-roc_auc_score(y,y_proba[:,1])
-accuracy_score(y,submit.model.predict(data))
-
-pred = pd.read_csv("test.csv")
-kk=pd.DataFrame()
-
-
-######################################################################################
-predictions=submit.model.predict_proba(pred)[:,1:2]
-submission = np.hstack((np.arange(50000).reshape(-1,1),predictions)) # Add Id column.
-np.savetxt(fname='submission1.csv', X=submission, header='Id,Predicted', delimiter=',', comments='')
+initThis = Genetic_Algorithm(population_size=100,mutation_prob=0.25,elitism=0.05,crossover_prob=0.87)
+initThis.Main() 
+np.argmax(initThis.fitness["Generation %s"%56])
+initThis.fitness["Generation %s"%56][99]
+initThis.population[99]
+initThis.population[17]        
 #######################################################################################
-#forest
-clf = RandomForestClassifier(max_depth=5,n_estimators=230, random_state=0)
-clf.fit(x_train,y_train)
-pred_test=clf.predict_proba(x_test)[:,1]
-roc_auc_score(y_test,pred_test)
-clf.fit(data,y)
-roc_auc_score(y,clf.predict_proba(data)[:,1])
-accuracy_score(y,clf.predict(data))
 
-predictions=clf.predict_proba(pred)[:,1:2]
-submission = np.hstack((np.arange(50000).reshape(-1,1),predictions)) # Add Id column.
-np.savetxt(fname='submission_forest.csv', X=submission, header='Id,Predicted', delimiter=',', comments='')
-#####################################################################################
-from lightgbm import LGBMClassifier
-
-lgbm = LGBMClassifier(n_estimators=120,random_state=56)
-lgbm.fit(data,y)
-pred_test=lgbm.predict_proba(data)[:,1]
-roc_auc_score(y,pred_test)
-accuracy_score(y_test,lgbm.predict(x_test))
-
-####################################################################################
-from catboost import CatBoostClassifier
-
-cat = CatBoostClassifier(custom_metric="AUC",num_boost_round=2000,objective="Logloss")
-cat.fit(data,y)
-pred_test=(cat.predict_proba(pred)[:,1:2]+lgbm.predict_proba(pred)[:,1:2])/2
-roc_auc_score(y,pred_test)
-accuracy_score(y_test,cat.predict(x_test))
-submission = np.hstack((np.arange(50000).reshape(-1,1),pred_test)) # Add Id column.
-np.savetxt(fname='submission_lightgbm_and_cat.csv', X=submission, header='Id,Predicted', delimiter=',', comments='')
-
-
-####################################################################################
 file_pi = open('GA_Evolved_1.obj', 'wb') 
 pickle.dump(initThis, file_pi,pickle.HIGHEST_PROTOCOL)
 
